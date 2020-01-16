@@ -1,16 +1,20 @@
 from dataclasses import dataclass
 import os
 import asyncio
-import random
-import statistics
+from functools import lru_cache
+
 
 from faker import Faker
 from pyinstrument import Profiler
+from redis import Redis
+from rq import Queue
+import numpy
 
 from process_ml_batch import process_ml_batch
 
 fake = Faker()
 
+q = Queue(connection=Redis())
 
 @dataclass
 class NameFacts:
@@ -22,6 +26,7 @@ class NameFacts:
     age_stats: dict = None
 
 
+@lru_cache(maxsize=None)
 def get_known_names() -> [str]:
     path = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__), "first_names.all.txt")
@@ -53,10 +58,12 @@ async def get_name_facts(name):
     known_names = get_known_names()
     if name not in known_names:
         return NameFacts(name=name, unknown=True)
-    gender = await get_gender(name)
-    meaning = await get_meaning(name)
-    popularity = await get_popularity(name)
-    process_ml_batch(name)
+    gender, meaning, popularity = await asyncio.gather(
+        get_gender(name),
+        get_meaning(name),
+        get_popularity(name),
+    )
+    q.enqueue(process_ml_batch, name)
     return NameFacts(
         name=name,
         unknown=False,
@@ -69,16 +76,16 @@ async def get_name_facts(name):
 
 # noinspection PyUnusedLocal
 def get_ages(name):
-    return [random.randint(1, 100) for _ in range(10000)]
+    return numpy.random.randint(100, size=100)
 
 
 def get_age_stats(name):
-    ages = get_ages(name)
+    ages = numpy.array(get_ages(name))
     return {
-        "mean": statistics.mean(ages),
-        "median": statistics.median(ages),
-        "most_common": statistics.mode(ages),
-        "oldest": max(ages),
+        "mean": numpy.mean(ages),
+        "median": numpy.median(ages),
+        "most_common": numpy.bincount(ages).argmax(),
+        "oldest": numpy.max(ages),
     }
 
 
@@ -88,8 +95,8 @@ async def main():
 
 
 if __name__ == "__main__":
-    # profiler = Profiler()
-    # profiler.start()
+    profiler = Profiler()
+    profiler.start()
     asyncio.run(main())
-    # profiler.stop()
-    # print(profiler.output_text(unicode=True, color=True))
+    profiler.stop()
+    print(profiler.output_text(unicode=True, color=True))
