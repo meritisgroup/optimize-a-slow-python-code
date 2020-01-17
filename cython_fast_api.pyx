@@ -16,14 +16,30 @@ fake = Faker()
 
 q = Queue(connection=Redis())
 
-@dataclass
-class NameFacts:
-    name: str
-    unknown: bool
-    gender: str = "N/A"
-    meaning: str = "N/A"
-    popularity: int = 0
-    age_stats: dict = None
+cdef class NameFacts:
+    def __init__(self,
+                 name,
+                 unknown,
+                 gender,
+                 meaning,
+                 popularity,
+                 age_stats, ):
+        self.name = name
+        self.unknown = unknown
+        self.gender = gender
+        self.meaning = meaning
+        self.popularity = popularity
+        self.age_stats = age_stats
+
+    def __str__(self):
+        return f"""
+        name : {self.name} 
+        unknown : {self.unknown} 
+        gender : {self.gender} 
+        meaning : {self.meaning} 
+        popularity : {self.popularity} 
+        age_stats : {self.age_stats}
+        """
 
 
 @lru_cache(maxsize=None)
